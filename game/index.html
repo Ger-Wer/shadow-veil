@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shadow Veil — a top-down stealth game</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0b0d12;
+    color: #e8e6df;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  #app { width: 960px; max-width: 100vw; padding: 12px 0 20px; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 0 4px 8px; }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: 2px; color: #2ec4b6; }
+  header span { color: #9aa0b0; font-size: 13px; }
+  #hud {
+    display: flex; align-items: center; gap: 14px;
+    background: #151924; border: 1px solid #2a3042; border-radius: 8px;
+    padding: 8px 12px; margin-bottom: 8px; font-size: 14px;
+  }
+  #hud .stat { white-space: nowrap; }
+  #hud .stat b { color: #ffd94d; }
+  #alertWrap { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 180px; }
+  #alertBar { flex: 1; height: 10px; background: #232838; border-radius: 5px; overflow: hidden; }
+  #alertFill { height: 100%; width: 0%; transition: width 120ms linear; }
+  .alert-low { background: #2ec4b6; }
+  .alert-mid { background: #ffb020; }
+  .alert-high { background: #ff5040; }
+  #alertLabel { min-width: 86px; font-size: 12px; color: #9aa0b0; }
+  #lives { color: #ff6b81; letter-spacing: 2px; }
+  #hud button {
+    background: #232838; color: #e8e6df; border: 1px solid #39415a;
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; font-size: 13px;
+    white-space: nowrap;
+  }
+  #hud button:hover { background: #2e3550; }
+  #stage { position: relative; width: 960px; max-width: 100%; }
+  canvas {
+    display: block; width: 960px; max-width: 100%; height: auto;
+    background: #1c2029; border: 1px solid #2a3042; border-radius: 8px;
+  }
+  .screen {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: rgba(8, 10, 15, 0.82); border-radius: 8px; padding: 24px;
+  }
+  .screen h2 { margin: 0 0 8px; font-size: 34px; letter-spacing: 4px; color: #2ec4b6; }
+  .screen p { margin: 6px 0; max-width: 560px; line-height: 1.5; color: #cfd3de; }
+  .screen .keys { font-size: 13px; color: #9aa0b0; }
+  .screen .keys b { color: #e8e6df; }
+  .screen button {
+    margin-top: 16px; font-size: 17px; padding: 11px 26px; cursor: pointer;
+    background: #2ec4b6; color: #08211e; border: 0; border-radius: 8px; font-weight: 700;
+  }
+  .screen button:hover { background: #4ad8c9; }
+  .screen button.ghost { background: #232838; color: #e8e6df; border: 1px solid #39415a; }
+  .screen .stats { color: #ffd94d; font-weight: 600; }
+  .hidden { display: none !important; }
+  footer { padding: 10px 4px 0; font-size: 12px; color: #7c8296; line-height: 1.6; }
+  footer b { color: #9aa0b0; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SHADOW VEIL</h1>
+    <span>a top-down stealth game — slip past the guards, steal the clues, vanish</span>
+  </header>
+
+  <div id="hud">
+    <span class="stat" id="level">Level 1/2</span>
+    <span class="stat"><b id="clues">Clues 0 / 3</b></span>
+    <div id="alertWrap">
+      <div id="alertBar"><div id="alertFill" class="alert-low"></div></div>
+      <span id="alertLabel">Hidden</span>
+    </div>
+    <span class="stat" id="lives">♥♥♥</span>
+    <span class="stat" id="time">0:00</span>
+    <button id="soundBtn" type="button">🔊 Sound on</button>
+    <button id="restartBtn" type="button">↻ Restart</button>
+  </div>
+
+  <div id="stage">
+    <canvas id="game" width="960" height="600"></canvas>
+
+    <div id="screen-title" class="screen">
+      <h2>SHADOW VEIL</h2>
+      <p>Night shift at the Meridian Archive. Three clues are hidden on the
+         floor, the exit is locked until you hold them all — and the guards
+         patrol with lanterns and sharp eyes.</p>
+      <p class="keys"><b>WASD / arrows</b> move &nbsp;·&nbsp; <b>Shift</b> sneak (slow, quiet, harder to spot)
+         &nbsp;·&nbsp; <b>Click</b> to walk there &nbsp;·&nbsp; <b>M</b> mute &nbsp;·&nbsp; <b>R</b> restart</p>
+      <p class="keys">Dark floor is shadow — detection fills much slower there.
+         Crates block a guard's sight. Running is loud: guards come to listen.</p>
+      <button id="startBtn" type="button">Start the heist</button>
+    </div>
+
+    <div id="screen-pause" class="screen hidden">
+      <h2>PAUSED</h2>
+      <p>The guards wait. So do you.</p>
+      <button id="resumeBtn" type="button">Resume</button>
+    </div>
+
+    <div id="screen-levelclear" class="screen hidden">
+      <h2>LEVEL CLEAR</h2>
+      <p class="stats" id="clearStats"></p>
+      <p>The next floor is guarded twice as well. Same rules: stay unseen.</p>
+      <button id="nextBtn" type="button">Next level →</button>
+    </div>
+
+    <div id="screen-won" class="screen hidden">
+      <h2>YOU VANISHED</h2>
+      <p>All clues stolen, every guard left staring at empty corridors.</p>
+      <p class="stats" id="wonStats"></p>
+      <button id="againBtn" type="button">Play again</button>
+    </div>
+
+    <div id="screen-gameover" class="screen hidden">
+      <h2>CAUGHT</h2>
+      <p>The guards know your face now. The archive keeps its secrets — this time.</p>
+      <p class="stats" id="overStats"></p>
+      <button id="retryBtn" type="button">Try again</button>
+    </div>
+  </div>
+
+  <footer>
+    <b>How to play:</b> collect all 3 clues, then reach the green exit.
+    A guard's yellow cone is its sight — step inside it and the alarm meter fills.
+    Break line of sight to let it drain; at full, the guard chases you down.
+    Shadows slow detection, crates block sight, running makes noise guards investigate.
+  </footer>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
