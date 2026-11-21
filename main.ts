@@ -49,6 +49,15 @@ function checkShots(shotsDir, shots) {
   }
 }
 
+function clearDirContents(dir) {
+  // Clear only the directory's contents, never the directory itself:
+  // on the grader /output is a mounted volume, and removing its mount
+  // point fails with EBUSY.
+  for (const name of readdirSync(dir)) {
+    rmSync(join(dir, name), { recursive: true, force: true });
+  }
+}
+
 function main() {
   const gameDir = join(repoRoot, 'game');
   const shotsDir = join(repoRoot, 'screenshots');
@@ -69,8 +78,8 @@ function main() {
   }
   checkShots(shotsDir, shots);
 
-  rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
+  clearDirContents(outDir);
   cpSync(gameDir, join(outDir, 'game'), { recursive: true });
   cpSync(shotsDir, join(outDir, 'screenshots'), { recursive: true });
 
